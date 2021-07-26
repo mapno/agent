@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/grafana/agent/pkg/tempo/contextkeys"
 	"github.com/grafana/tempo/pkg/tempopb"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,13 +25,12 @@ const (
 func TestConsumeMetrics(t *testing.T) {
 	traces := traceSamples(t, traceSamplePath)
 
-	p, err := newProcessor(&mockConsumer{}, &Config{})
-	require.NoError(t, err)
+	p := newProcessor(&mockConsumer{}, &Config{})
 
 	reg := prometheus.NewRegistry()
 	ctx := context.WithValue(context.Background(), contextkeys.PrometheusRegisterer, reg)
 
-	err = p.Start(ctx, nil)
+	err := p.Start(ctx, nil)
 	require.NoError(t, err)
 
 	err = p.ConsumeTraces(context.Background(), traces)
@@ -44,15 +43,14 @@ func TestConsumeMetrics(t *testing.T) {
 func TestConsumeMetrics_Unpaired(t *testing.T) {
 	traces := traceSamples(t, unpairedTraceSamplePath)
 
-	p, err := newProcessor(&mockConsumer{}, &Config{
+	p := newProcessor(&mockConsumer{}, &Config{
 		Wait: time.Millisecond * 100,
 	})
-	require.NoError(t, err)
 
 	reg := prometheus.NewRegistry()
 	ctx := context.WithValue(context.Background(), contextkeys.PrometheusRegisterer, reg)
 
-	err = p.Start(ctx, nil)
+	err := p.Start(ctx, nil)
 	require.NoError(t, err)
 
 	err = p.ConsumeTraces(context.Background(), traces)
@@ -66,16 +64,15 @@ func TestConsumeMetrics_Unpaired(t *testing.T) {
 func TestConsumeMetrics_MaxItems(t *testing.T) {
 	traces := traceSamples(t, traceSamplePath)
 
-	p, err := newProcessor(&mockConsumer{}, &Config{
+	p := newProcessor(&mockConsumer{}, &Config{
 		Wait:     time.Millisecond,
 		MaxItems: 1, // Configure max number of items in store to 1. Only one edge will be processed.
 	})
-	require.NoError(t, err)
 
 	reg := prometheus.NewRegistry()
 	ctx := context.WithValue(context.Background(), contextkeys.PrometheusRegisterer, reg)
 
-	err = p.Start(ctx, nil)
+	err := p.Start(ctx, nil)
 	require.NoError(t, err)
 
 	err = p.ConsumeTraces(context.Background(), traces)
