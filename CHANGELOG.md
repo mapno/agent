@@ -10,6 +10,8 @@
 
 - [FEATURE] Add logging support to the Grafana Agent Operator. (@rfratto)
 
+- [FEATURE] Service graphs processor (@mapno)
+
 - [ENHANCEMENT] The Grafana Agent Operator will now default to deploying
   the matching release version of the Grafana Agent instead of v0.14.0.
   (@rfratto)
