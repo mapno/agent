@@ -15,7 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/otlp"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 const (
@@ -104,7 +105,7 @@ func traceSamples(t *testing.T, path string) pdata.Traces {
 	b, err := r.Marshal()
 	require.NoError(t, err)
 
-	traces, err := pdata.TracesFromOtlpProtoBytes(b)
+	traces, err := otlp.NewProtobufTracesUnmarshaler().UnmarshalTraces(b)
 	require.NoError(t, err)
 
 	return traces
