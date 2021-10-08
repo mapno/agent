@@ -61,7 +61,7 @@ func (t *Traces) ApplyConfig(logsSubsystem *logs.Logs, promInstanceManager insta
 
 	for _, c := range cfg.Configs {
 		var (
-			instReg = prom_client.WrapRegistererWith(prom_client.Labels{"tempo_config": c.Name}, t.reg)
+			instReg = prom_client.WrapRegistererWith(prom_client.Labels{"traces_config": c.Name}, t.reg)
 		)
 
 		// If an old instance exists, update it and move it to the new map.
