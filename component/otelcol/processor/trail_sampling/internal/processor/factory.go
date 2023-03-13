@@ -8,10 +8,6 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 )
 
-type Config struct {
-	otelconfig.ProcessorSettings
-}
-
 func NewFactory() otelcomponent.ProcessorFactory {
 	return otelcomponent.NewProcessorFactory(
 		"trail_sampling",
@@ -24,7 +20,7 @@ func NewFactory() otelcomponent.ProcessorFactory {
 
 func createTracesProcessor(
 	_ context.Context,
-	params otelcomponent.ProcessorCreateSettings,
+	_ otelcomponent.ProcessorCreateSettings,
 	cfg otelconfig.Processor,
 	nextConsumer consumer.Traces,
 ) (otelcomponent.TracesProcessor, error) {
