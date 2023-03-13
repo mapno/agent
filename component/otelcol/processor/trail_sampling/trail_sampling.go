@@ -1,10 +1,10 @@
-package traceql_sampling
+package trail_sampling
 
 import (
 	"github.com/grafana/agent/component"
 	"github.com/grafana/agent/component/otelcol"
 	"github.com/grafana/agent/component/otelcol/processor"
-	traceqlprocessor "github.com/grafana/agent/component/otelcol/processor/traceql_sampling/internal/processor"
+	trailprocessor "github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor"
 	"github.com/grafana/agent/pkg/river"
 	otelcomponent "go.opentelemetry.io/collector/component"
 	otelconfig "go.opentelemetry.io/collector/config"
@@ -12,12 +12,12 @@ import (
 
 func init() {
 	component.Register(component.Registration{
-		Name:    "otelcol.processor.traceql_sampling",
+		Name:    "otelcol.processor.trail_sampling",
 		Args:    Arguments{},
 		Exports: otelcol.ConsumerExports{},
 
 		Build: func(opts component.Options, args component.Arguments) (component.Component, error) {
-			fact := traceqlprocessor.NewFactory()
+			fact := trailprocessor.NewFactory()
 			return processor.New(opts, fact, args.(Arguments))
 		},
 	})
@@ -25,6 +25,10 @@ func init() {
 
 // Arguments configures the otelcol.processor.traceql_sampling component.
 type Arguments struct {
+	// TODO: Configure better
+	// TODO: When to validate?
+	Queries string `river:"query,attr"` // TraceQL Queries to use for sampling
+
 	// Output configures where to send processed data. Required.
 	Output *otelcol.ConsumerArguments `river:"output,block"`
 }

@@ -14,7 +14,7 @@ type Config struct {
 
 func NewFactory() otelcomponent.ProcessorFactory {
 	return otelcomponent.NewProcessorFactory(
-		"traceql",
+		"trail_sampling",
 		func() otelconfig.Processor {
 			return &Config{}
 		},
@@ -29,5 +29,5 @@ func createTracesProcessor(
 	nextConsumer consumer.Traces,
 ) (otelcomponent.TracesProcessor, error) {
 	tCfg := cfg.(*Config)
-	return newProcessor(tCfg)
+	return newTracesProcessor(nextConsumer, *tCfg)
 }
