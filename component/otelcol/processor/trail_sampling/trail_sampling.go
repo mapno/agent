@@ -1,6 +1,7 @@
 package trail_sampling
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/grafana/agent/component"
@@ -49,7 +50,7 @@ type Arguments struct {
 	NumTraces               int           `river:"num_traces,attr,optional"`
 	ExpectedNewTracesPerSec int           `river:"expected_new_traces_per_sec,attr,optional"`
 	// Policies configures the sampling policies. Required.
-	Policies []PolicyCfg `river:"policies,block"`
+	Policies []PolicyCfg `river:"policy,block,optional"`
 
 	// Output configures where to send processed data. Required.
 	Output *otelcol.ConsumerArguments `river:"output,block"`
@@ -60,12 +61,28 @@ var (
 	_ river.Unmarshaler   = (*Arguments)(nil)
 )
 
+var DefaultArguments = Arguments{
+	DecisionWait:            10 * time.Second,
+	NumTraces:               1000,
+	ExpectedNewTracesPerSec: 10,
+}
+
 // UnmarshalRiver implements river.Unmarshaler. It applies defaults to args and
 // validates settings provided by the user.
 func (args *Arguments) UnmarshalRiver(f func(interface{}) error) error {
+	*args = DefaultArguments
+
 	type arguments Arguments
 	if err := f((*arguments)(args)); err != nil {
 		return err
+	}
+
+	if args.DecisionWait.Milliseconds() <= 0 {
+		return fmt.Errorf("decision_wait must be greater than zero")
+	}
+
+	if args.NumTraces <= 0 {
+		return fmt.Errorf("num_traces must be greater than zero")
 	}
 
 	return nil
@@ -78,15 +95,17 @@ func (args Arguments) Convert() otelconfig.Processor {
 		otelPolicyCfgs = append(otelPolicyCfgs, policyCfg.Convert())
 	}
 
-	var tspCfg trailprocessor.Config
+	var otelConfig trailprocessor.Config
 	mustDecodeMapStructure(map[string]interface{}{
 		"decision_wait":               args.DecisionWait,
 		"num_traces":                  args.NumTraces,
 		"expected_new_traces_per_sec": args.ExpectedNewTracesPerSec,
 		"policies":                    otelPolicyCfgs,
-	}, &tspCfg)
+	}, &otelConfig)
 
-	return nil
+	otelConfig.ProcessorSettings = otelconfig.NewProcessorSettings(otelconfig.NewComponentID("trail_sampling"))
+
+	return &otelConfig
 }
 
 // Extensions implements processor.Arguments.

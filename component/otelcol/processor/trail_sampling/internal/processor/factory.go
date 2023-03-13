@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"time"
 
 	otelcomponent "go.opentelemetry.io/collector/component"
 	otelconfig "go.opentelemetry.io/collector/config"
@@ -11,11 +12,17 @@ import (
 func NewFactory() otelcomponent.ProcessorFactory {
 	return otelcomponent.NewProcessorFactory(
 		"trail_sampling",
-		func() otelconfig.Processor {
-			return &Config{}
-		},
+		createDefaultConfig,
 		otelcomponent.WithTracesProcessor(createTracesProcessor, otelcomponent.StabilityLevelAlpha),
 	)
+}
+
+func createDefaultConfig() otelconfig.Processor {
+	return &Config{
+		ProcessorSettings: otelconfig.NewProcessorSettings(otelconfig.NewComponentID("trail_sampling")),
+		DecisionWait:      30 * time.Second,
+		NumTraces:         50000,
+	}
 }
 
 func createTracesProcessor(

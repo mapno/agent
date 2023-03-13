@@ -1,11 +1,42 @@
-prometheus.scrape "default" {
-  targets = [
-    {"__address__" = "demo.robustperception.io:9090"},
-  ]
-  forward_to = [prometheus.remote_write.default.receiver]
+logging {
+	level  = "debug"
+	format = "logfmt"
 }
 
-prometheus.remote_write "default" {
-  // No endpoints configured; metrics will be accumulated locally in a WAL
-  // and discarded.
+tracing {
+	// Sample all traces. This value should be lower for production configs!
+	sampling_fraction = 1
+
+	write_to = [otelcol.exporter.otlp.tempo.input]
+}
+
+otelcol.receiver.otlp "tempo" {
+    grpc {
+        endpoint = "0.0.0.0:4317"
+    }
+    output {
+        traces = [otelcol.processor.trail_sampling.tempo.input]
+    }
+}
+
+otelcol.processor.trail_sampling "tempo" {
+    policy {
+        name = "sample-all"
+        query = "{}"
+        probabilistic = 1
+    }
+
+    output {
+        traces = [otelcol.exporter.otlp.tempo.input]
+    }
+}
+
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "tempo:4317"
+
+		tls {
+			insecure = true
+		}
+	}
 }

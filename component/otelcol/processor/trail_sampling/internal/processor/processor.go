@@ -46,7 +46,7 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 		return nil, otelcomponent.ErrNilNextConsumer
 	}
 
-	numDecisionBatches := uint64(cfg.NumTraces.Seconds()) // 10 seconds
+	numDecisionBatches := uint64(cfg.DecisionWait.Seconds())
 	inBatcher, err := idbatcher.New(numDecisionBatches, cfg.ExpectedNewTracesPerSec, uint64(2*runtime.NumCPU()))
 	if err != nil {
 		return nil, err
