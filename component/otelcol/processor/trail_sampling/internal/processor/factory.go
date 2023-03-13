@@ -19,11 +19,11 @@ func NewFactory() otelcomponent.ProcessorFactory {
 }
 
 func createTracesProcessor(
-	_ context.Context,
+	ctx context.Context,
 	_ otelcomponent.ProcessorCreateSettings,
 	cfg otelconfig.Processor,
 	nextConsumer consumer.Traces,
 ) (otelcomponent.TracesProcessor, error) {
 	tCfg := cfg.(*Config)
-	return newTracesProcessor(nextConsumer, *tCfg)
+	return newTracesProcessor(ctx, nextConsumer, *tCfg)
 }

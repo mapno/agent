@@ -2,11 +2,13 @@ package processor
 
 import (
 	"context"
+	"log"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/sampling"
 	otelcomponent "go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -16,83 +18,64 @@ import (
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/idbatcher"
 )
 
-// policy combines a sampling policy evaluator with the destinations to be used for that policy.
-type policy struct {
-	// name used to identify this policy instance.
-	name string
-
-	// TODO: evaluator should be a
-	// // evaluator that decides if a trace is sampled or not by this policy instance.
-	// evaluator sampling.PolicyEvaluator
-
-	// ctx used to carry metric tags of each policy.
-	ctx context.Context
-}
-
 // trailSamplingProcessor handles the incoming trace data and uses the given sampling
 // policy to sample traces.
 type trailSamplingProcessor struct {
-	ctx             context.Context
-	nextConsumer    consumer.Traces
-	maxNumTraces    uint64
-	policies        []*policy
-	logger          *zap.Logger
-	idToTrace       sync.Map
-	policyTicker    func()
-	tickerFrequency time.Duration
+	ctx          context.Context
+	logger       *zap.Logger // TODO: Use better logger
+	nextConsumer consumer.Traces
+
+	policies []*sampling.Policy
+
 	decisionBatcher idbatcher.Batcher
-	deleteChan      chan pcommon.TraceID
+	idToTrace       sync.Map
 	numTracesOnMap  *atomic.Uint64
+
+	policyTicker    *sampling.PolicyTicker
+	tickerFrequency time.Duration
+	deleteChan      chan pcommon.TraceID
 }
 
 const (
 	sourceFormat = "trail_sampling"
 )
 
-// newTracesProcessor returns a trailSamplingProcessor.TracesProcessor that will perform tail sampling according to the given
-// configuration.
-func newTracesProcessor(nextConsumer consumer.Traces, cfg Config) (otelcomponent.TracesProcessor, error) {
+// newTracesProcessor returns a trailSamplingProcessor.TracesProcessor that will perform trail sampling according to the given configuration.
+func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg Config) (otelcomponent.TracesProcessor, error) {
 	if nextConsumer == nil {
 		return nil, otelcomponent.ErrNilNextConsumer
 	}
 
-	numDecisionBatches := uint64(10) // 10 seconds
-	inBatcher, err := idbatcher.New(numDecisionBatches, 50, uint64(2*runtime.NumCPU()))
+	numDecisionBatches := uint64(cfg.NumTraces.Seconds()) // 10 seconds
+	inBatcher, err := idbatcher.New(numDecisionBatches, cfg.ExpectedNewTracesPerSec, uint64(2*runtime.NumCPU()))
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := context.Background()
-	var policies []*policy
-	// TODO: Define traceql policies
+	var policies []*sampling.Policy
+	// TODO: Build real traceql policies
+	policies = append(policies, &sampling.Policy{
+		Name: "test",
+		Evaluate: func(id pcommon.TraceID, trace *sampling.TraceData) (sampling.Decision, error) {
+			log.Println("Evaluating trace", id.HexString())
+			return sampling.Sampled, nil
+		},
+	})
 
 	tsp := &trailSamplingProcessor{
-		ctx:          ctx,
-		nextConsumer: nextConsumer,
-		maxNumTraces: 100, // TODO: configure
-		// logger:          logger, // TODO: configure
+		ctx:             ctx,
+		nextConsumer:    nextConsumer,
+		logger:          zap.NewExample(), // TODO: configure
 		decisionBatcher: inBatcher,
 		policies:        policies,
 		tickerFrequency: time.Second,
 		numTracesOnMap:  &atomic.Uint64{},
 	}
 
-	tsp.policyTicker = func() {
-		t := time.NewTicker(time.Second * 10)
-		select {
-		case <-t.C:
-			// TODO: Do sampling policy evaluation
-		case <-tsp.ctx.Done():
-			t.Stop()
-		}
-	}
+	tsp.policyTicker = &sampling.PolicyTicker{OnTickFunc: tsp.samplingPolicyOnTick}
 	tsp.deleteChan = make(chan pcommon.TraceID, 100)
 
 	return tsp, nil
-}
-
-type policyMetrics struct {
-	idNotFoundOnMapCount, evaluateErrorCount, decisionSampled, decisionNotSampled int64
 }
 
 // ConsumeTraces is required by the trailSamplingProcessor.Traces interface.
@@ -194,20 +177,75 @@ func (tsp *trailSamplingProcessor) processTraces(resourceSpans ptrace.ResourceSp
 	// stats.Record(tsp.ctx, statNewTraceIDReceivedCount.M(newTraceIDs))
 }
 
+func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
+	// metrics := policyMetrics{}
+
+	// startTime := time.Now()
+	batch, _ := tsp.decisionBatcher.CloseCurrentAndTakeFirstBatch()
+	batchLen := len(batch)
+	tsp.logger.Debug("Sampling Policy Evaluation ticked")
+	for _, id := range batch {
+		d, ok := tsp.idToTrace.Load(id)
+		if !ok {
+			// metrics.idNotFoundOnMapCount++
+			continue
+		}
+		trace := d.(*sampling.TraceData)
+		trace.DecisionTime = time.Now()
+
+		for _, policy := range tsp.policies {
+			decision, err := policy.Evaluate(id, trace)
+			if err != nil {
+				// metrics.evaluateErrorCount++
+				tsp.logger.Warn("Error evaluating sampling policy", zap.Error(err))
+				continue
+			}
+			if decision == sampling.Sampled {
+				trace.FinalDecision = sampling.Sampled
+				break
+			}
+		}
+
+		// Sampled or not, remove the batches
+		trace.Lock()
+		allSpans := ptrace.NewTraces()
+		trace.ReceivedBatches.MoveTo(allSpans)
+		trace.Unlock()
+
+		if trace.FinalDecision == sampling.Sampled {
+			_ = tsp.nextConsumer.ConsumeTraces(context.TODO(), allSpans)
+		}
+	}
+
+	// stats.Record(tsp.ctx,
+	// 	statOverallDecisionLatencyUs.M(int64(time.Since(startTime)/time.Microsecond)),
+	// 	statDroppedTooEarlyCount.M(metrics.idNotFoundOnMapCount),
+	// 	statPolicyEvaluationErrorCount.M(metrics.evaluateErrorCount),
+	// 	statTracesOnMemoryGauge.M(int64(tsp.numTracesOnMap.Load())))
+
+	tsp.logger.Debug("Sampling policy evaluation completed",
+		zap.Int("batch.len", batchLen),
+		// zap.Int64("sampled", metrics.decisionSampled),
+		// zap.Int64("notSampled", metrics.decisionNotSampled),
+		// zap.Int64("droppedPriorToEvaluation", metrics.idNotFoundOnMapCount),
+		// zap.Int64("policyEvaluationErrors", metrics.evaluateErrorCount),
+	)
+}
+
 func (tsp *trailSamplingProcessor) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
 // Start is invoked during service startup.
 func (tsp *trailSamplingProcessor) Start(context.Context, otelcomponent.Host) error {
-	// TODO: Start the policy ticker
+	tsp.policyTicker.Start(time.Second)
 	return nil
 }
 
 // Shutdown is invoked during service shutdown.
 func (tsp *trailSamplingProcessor) Shutdown(context.Context) error {
 	tsp.decisionBatcher.Stop()
-	// TODO: Stop the policy ticker
+	tsp.policyTicker.Stop()
 	return nil
 }
 
