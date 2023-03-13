@@ -1,0 +1,11 @@
+prometheus.scrape "default" {
+  targets = [
+    {"__address__" = "demo.robustperception.io:9090"},
+  ]
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  // No endpoints configured; metrics will be accumulated locally in a WAL
+  // and discarded.
+}
