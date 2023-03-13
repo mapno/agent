@@ -1,17 +1,34 @@
-package trail_sampling
+package processor
 
 import (
 	"context"
 	"time"
+	"unsafe"
 
 	"github.com/grafana/tempo/pkg/tempopb"
 	"github.com/grafana/tempo/pkg/traceql"
+	otlpcollectortrace "go.opentelemetry.io/collector/pdata/external/data/protogen/collector/trace/v1"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	v1 "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 var engine = traceql.NewEngine()
 
-func Matches(ctx context.Context, trace *v1.TracesData, query string) (bool, error) {
+type externalTraces struct {
+	// !@#$!@#$!@#$
+	Orig *otlpcollectortrace.ExportTraceServiceRequest
+}
+
+func Matches(ctx context.Context, trace ptrace.Traces, query string) (bool, error) {
+	// Get access to internal structs
+	trace2 := *((*externalTraces)(unsafe.Pointer(&trace)))
+	trace2 = trace2
+
+	// TODO - Do something with trace2.Orig.ResourceSpans
+	return false, nil
+}
+
+func MatchesProto(ctx context.Context, trace *v1.TracesData, query string) (bool, error) {
 	f := &TraceProtoFetcher{tr: trace}
 	req := &tempopb.SearchRequest{
 		Query: query,

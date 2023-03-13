@@ -1,4 +1,4 @@
-package trail_sampling
+package processor
 
 import (
 	"context"
@@ -124,7 +124,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 	}
 
 	for _, req := range searchesThatMatch {
-		resp, err := Matches(ctx, wantTr, req)
+		resp, err := MatchesProto(ctx, wantTr, req)
 		require.NoError(t, err, "search request:%v", req)
 		require.True(t, resp, "search request: %+v", req)
 	}
@@ -150,7 +150,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 	}
 
 	for _, req := range searchesThatDontMatch {
-		res, err := Matches(ctx, wantTr, req)
+		res, err := MatchesProto(ctx, wantTr, req)
 		require.NoError(t, err, "search request: %+v", req)
 		require.False(t, res, "search request: %+v", req)
 	}

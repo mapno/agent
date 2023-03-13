@@ -53,14 +53,25 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 	}
 
 	var policies []*sampling.Policy
-	// TODO: Build real traceql policies
-	policies = append(policies, &sampling.Policy{
-		Name: "test",
-		Evaluate: func(id pcommon.TraceID, trace *sampling.TraceData) (sampling.Decision, error) {
-			log.Println("Evaluating trace", id.HexString())
-			return sampling.Sampled, nil
-		},
-	})
+	for _, pol := range cfg.PolicyCfgs {
+
+		// TODO: Build real traceql policies
+		policies = append(policies, &sampling.Policy{
+			Name: "test",
+			Evaluate: func(id pcommon.TraceID, trace *sampling.TraceData) (sampling.Decision, error) {
+				log.Println("Evaluating trace", id.HexString())
+
+				matched, err := Matches(ctx, trace.ReceivedBatches, pol.Query)
+				if err != nil {
+					return sampling.NotSampled, err
+				}
+				if matched {
+					return sampling.Sampled, nil
+				}
+				return sampling.Pending, nil
+			},
+		})
+	}
 
 	tsp := &trailSamplingProcessor{
 		ctx:             ctx,
