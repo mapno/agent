@@ -32,7 +32,7 @@ func (s *TraceQLSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decis
 	if matched {
 		return Sampled, nil
 	}
-	return Pending, nil
+	return NotSampled, nil
 }
 
 func (s *TraceQLSampler) WithProbabilitySampler(r float64) {
