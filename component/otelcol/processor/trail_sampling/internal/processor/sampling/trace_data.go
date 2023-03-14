@@ -2,10 +2,10 @@ package sampling
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.uber.org/atomic"
 )
 
 // TraceData stores the sampling related trace data.

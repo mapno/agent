@@ -80,7 +80,6 @@ func (f *PtraceFetcher) Fetch(_ context.Context, req traceql.FetchSpansRequest) 
 							dmatch = d < cond.Operands[0].D
 						case traceql.OpLessEqual:
 							dmatch = d <= cond.Operands[0].D
-
 						}
 						if dmatch {
 							matchedAttrs[cond.Attribute] = traceql.NewStaticDuration(d)
@@ -170,7 +169,6 @@ type TraceProtoFetcher struct {
 var _ traceql.SpansetFetcher = (*TraceProtoFetcher)(nil)
 
 func (f *TraceProtoFetcher) Fetch(_ context.Context, req traceql.FetchSpansRequest) (traceql.FetchSpansResponse, error) {
-
 	var matchingSpans []traceql.Span
 	var traceID []byte
 	var err error
@@ -179,7 +177,6 @@ func (f *TraceProtoFetcher) Fetch(_ context.Context, req traceql.FetchSpansReque
 	for _, rs := range trace.ResourceSpans {
 		for _, ss := range rs.ScopeSpans {
 			for _, s := range ss.Spans {
-
 				if traceID == nil {
 					traceID = s.TraceId
 				}
@@ -212,7 +209,6 @@ func (f *TraceProtoFetcher) Fetch(_ context.Context, req traceql.FetchSpansReque
 							dmatch = d < cond.Operands[0].D
 						case traceql.OpLessEqual:
 							dmatch = d <= cond.Operands[0].D
-
 						}
 						if dmatch {
 							matchedAttrs[cond.Attribute] = traceql.NewStaticDuration(d)

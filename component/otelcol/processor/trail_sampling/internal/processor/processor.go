@@ -5,7 +5,6 @@ import (
 	"log"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/sampling"
@@ -13,6 +12,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/idbatcher"
