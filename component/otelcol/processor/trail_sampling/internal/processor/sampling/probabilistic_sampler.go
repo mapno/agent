@@ -21,6 +21,14 @@ type ProbabilisticSampler struct {
 }
 
 func (s *ProbabilisticSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error) {
+	// Short circuits
+	if s.threshold == 0 {
+		return NotSampled, nil
+	}
+	if s.threshold == math.MaxUint64 {
+		return Sampled, nil
+	}
+
 	if hashTraceID("", traceID[:]) <= s.threshold {
 		return Sampled, nil
 	}

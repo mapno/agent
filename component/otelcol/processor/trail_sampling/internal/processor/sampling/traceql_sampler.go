@@ -2,6 +2,7 @@ package sampling
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/traceql"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -19,20 +20,24 @@ type TraceQLSampler struct {
 }
 
 func (s *TraceQLSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error) {
-	if s.rateSampler != nil {
-		if decision, err := s.rateSampler.Evaluate(traceID, td); err != nil || decision != Sampled {
-			return decision, err
-		}
-	}
 
+	fmt.Printf("Evaluating query %s against traceID %v\n", s.query, traceID)
 	matched, err := traceql.Matches(context.Background(), td.ReceivedBatches, s.query)
 	if err != nil {
 		return NotSampled, err
 	}
 	if matched {
-		return Sampled, nil
+		fmt.Printf("...Matched. Now checking sampler\n")
+		if s.rateSampler == nil {
+			return Sampled, nil
+		}
+		decision, err := s.rateSampler.Evaluate(traceID, td)
+		fmt.Printf("...Sampler decision: %v\n", decision)
+		return decision, err
 	}
-	return NotSampled, nil
+
+	// This means policy doesn't apply to this trace
+	return Unspecified, nil
 }
 
 func (s *TraceQLSampler) WithProbabilitySampler(r float64) {

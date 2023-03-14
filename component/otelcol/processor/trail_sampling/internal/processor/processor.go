@@ -54,9 +54,7 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 	var policies []sampling.PolicyEvaluator
 	for _, policyCfg := range cfg.PolicyCfgs {
 		policy := sampling.NewTraceQLSampler(policyCfg.Query)
-		if policyCfg.Probabilistic > 0 {
-			policy.WithProbabilitySampler(policyCfg.Probabilistic)
-		}
+		policy.WithProbabilitySampler(policyCfg.Probabilistic)
 
 		policies = append(policies, policy)
 	}
@@ -195,8 +193,8 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 				tsp.logger.Warn("Error evaluating sampling policy", zap.Error(err))
 				continue
 			}
-			if decision == sampling.Sampled {
-				trace.FinalDecision = sampling.Sampled
+			if decision != sampling.Unspecified {
+				trace.FinalDecision = decision
 				break
 			}
 		}
