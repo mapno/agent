@@ -51,8 +51,9 @@ func newResAttr(name string) traceql.Attribute {
 func TestBackendBlockSearchTraceQL(t *testing.T) {
 
 	ctx := context.TODO()
-	wantTraceID := []byte{1, 2, 3}
-	wantTr := fullyPopulatedTestTrace(wantTraceID)
+	wantTraceID := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	wantTr, err := fromProto(fullyPopulatedTestTrace(wantTraceID))
+	require.NoError(t, err)
 
 	searchesThatMatch := []string{
 		"{}", // Empty request
@@ -128,7 +129,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 	}
 
 	for _, req := range searchesThatMatch {
-		resp, err := MatchesProto(ctx, wantTr, req)
+		resp, err := Matches(ctx, wantTr, req)
 		require.NoError(t, err, "search request:%v", req)
 		require.True(t, resp, "search request: %+v", req)
 	}
@@ -154,7 +155,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 	}
 
 	for _, req := range searchesThatDontMatch {
-		res, err := MatchesProto(ctx, wantTr, req)
+		res, err := Matches(ctx, wantTr, req)
 		require.NoError(t, err, "search request: %+v", req)
 		require.False(t, res, "search request: %+v", req)
 	}
@@ -176,10 +177,8 @@ func parse(t *testing.T, q string) traceql.Condition {
 
 func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 	ctx := context.Background()
-	wantTr := fullyPopulatedTestTrace(nil)
-	b := &TraceProtoFetcher{
-		tr: wantTr,
-	}
+	trID := [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	wantTr := fullyPopulatedTestTrace(trID)
 
 	// Helper functions to make requests
 	makeSpansets := func(sets ...*traceql.Spanset) []*traceql.Spanset {
@@ -188,7 +187,8 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 
 	makeSpanset := func(spans ...traceql.Span) *traceql.Spanset {
 		return &traceql.Spanset{
-			Spans: spans,
+			TraceID: trID[:],
+			Spans:   spans,
 		}
 	}
 
@@ -359,6 +359,14 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+
+		tr, err := fromProto(fullyPopulatedTestTrace(trID))
+		require.NoError(t, err)
+
+		b := &PtraceFetcher{
+			td: tr,
+		}
+
 		req := tc.req
 		resp, err := b.Fetch(ctx, req)
 		require.NoError(t, err, "search request: %+v", tc.req)
@@ -380,7 +388,7 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 	}
 }
 
-func fullyPopulatedTestTrace(id []byte) *v1.TracesData {
+func fullyPopulatedTestTrace(id [16]byte) *v1.TracesData {
 
 	strPtr := func(s string) *v1_common.AnyValue {
 		return &v1_common.AnyValue{Value: &v1_common.AnyValue_StringValue{StringValue: s}}
@@ -419,8 +427,8 @@ func fullyPopulatedTestTrace(id []byte) *v1.TracesData {
 					{
 						Spans: []*v1.Span{
 							{
-								SpanId:                 []byte("spanid"),
-								TraceId:                id,
+								SpanId:                 []byte("spanid00"),
+								TraceId:                id[:],
 								Name:                   "hello",
 								StartTimeUnixNano:      uint64(100 * time.Second),
 								EndTimeUnixNano:        uint64(200 * time.Second),
@@ -448,8 +456,8 @@ func fullyPopulatedTestTrace(id []byte) *v1.TracesData {
 								},
 								Links: []*v1.Span_Link{
 									{
-										TraceId:                []byte{0x01},
-										SpanId:                 []byte{0x02},
+										TraceId:                make([]byte, 16),
+										SpanId:                 make([]byte, 8),
 										TraceState:             "state",
 										DroppedAttributesCount: 3,
 										Attributes: []*v1_common.KeyValue{
@@ -475,7 +483,7 @@ func fullyPopulatedTestTrace(id []byte) *v1.TracesData {
 					{
 						Spans: []*v1.Span{
 							{
-								SpanId: []byte("spanid2"),
+								SpanId: []byte("spanid22"),
 								Name:   "world",
 							},
 						},
