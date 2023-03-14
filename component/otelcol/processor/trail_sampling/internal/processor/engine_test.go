@@ -2,15 +2,11 @@ package processor
 
 import (
 	"context"
-	"crypto/rand"
 	"testing"
 	"time"
 
 	"github.com/grafana/tempo/pkg/traceql"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/ptrace"
-	semconv "go.opentelemetry.io/collector/semconv/v1.13.0"
 	v1_common "go.opentelemetry.io/proto/otlp/common/v1"
 	v1_resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	v1 "go.opentelemetry.io/proto/otlp/trace/v1"
@@ -492,43 +488,4 @@ func fullyPopulatedTestTrace(id [16]byte) *v1.TracesData {
 			},
 		},
 	}
-}
-
-func buildSampleTrace(attrValue string) ptrace.Traces {
-	tStart := time.Date(2022, 1, 2, 3, 4, 5, 6, time.UTC)
-	tEnd := time.Date(2022, 1, 2, 3, 4, 6, 6, time.UTC)
-
-	traces := ptrace.NewTraces()
-
-	resourceSpans := traces.ResourceSpans().AppendEmpty()
-	resourceSpans.Resource().Attributes().PutStr(semconv.AttributeServiceName, "some-service")
-
-	scopeSpans := resourceSpans.ScopeSpans().AppendEmpty()
-
-	var traceID pcommon.TraceID
-	rand.Read(traceID[:])
-
-	var clientSpanID, serverSpanID pcommon.SpanID
-	rand.Read(clientSpanID[:])
-	rand.Read(serverSpanID[:])
-
-	clientSpan := scopeSpans.Spans().AppendEmpty()
-	clientSpan.SetName("client span")
-	clientSpan.SetSpanID(clientSpanID)
-	clientSpan.SetTraceID(traceID)
-	clientSpan.SetKind(ptrace.SpanKindClient)
-	clientSpan.SetStartTimestamp(pcommon.NewTimestampFromTime(tStart))
-	clientSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
-	clientSpan.Attributes().PutStr("some-attribute", attrValue) // Attribute selected as dimension for metrics
-
-	serverSpan := scopeSpans.Spans().AppendEmpty()
-	serverSpan.SetName("server span")
-	serverSpan.SetSpanID(serverSpanID)
-	serverSpan.SetTraceID(traceID)
-	serverSpan.SetParentSpanID(clientSpanID)
-	serverSpan.SetKind(ptrace.SpanKindServer)
-	serverSpan.SetStartTimestamp(pcommon.NewTimestampFromTime(tStart))
-	serverSpan.SetEndTimestamp(pcommon.NewTimestampFromTime(tEnd))
-
-	return traces
 }
