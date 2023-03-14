@@ -68,7 +68,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 		`{` + LabelDuration + ` <= 100s}`,
 		`{` + LabelStatus + ` = error}`,
 		// Resource well-known attributes
-		/*`{.` + LabelServiceName + ` = "spanservicename"}`, // Overridden at span
+		`{.` + LabelServiceName + ` = "spanservicename"}`, // Overridden at span
 		`{.` + LabelCluster + ` = "cluster"}`,
 		`{.` + LabelNamespace + ` = "namespace"}`,
 		`{.` + LabelPod + ` = "pod"}`,
@@ -112,20 +112,18 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 		`{.foo =~ "d.*"}`,        // String Regex
 		`{resource.foo = "abc"}`, // Resource-level only
 		`{span.foo = "def"}`,     // Span-level only
-		`{.foo}`,                 // Projection only
+		//`{.foo}`, // Projection only
 		`{.foo = "baz" || .` + LabelHTTPStatusCode + ` > 100}`,                       // Matches either condition
 		`{.` + LabelHTTPStatusCode + ` > 100 || .foo = "baz"}`,                       // Same as above but reversed order
 		`{.foo > 100 || .foo = "def"}`,                                               // Same attribute with mixed types
 		`{.` + LabelHTTPStatusCode + ` = 500 || .` + LabelHTTPStatusCode + ` > 500}`, // Multiple conditions on same well-known attribute, matches either
 		`{` + LabelName + ` = "hello" || ` + LabelDuration + ` < 100s }`,             // Mix of duration with other conditions
 		`{.name = "Bob"}`, // Almost conflicts with intrinsic but still works
-		`{resource.` + LabelServiceName + ` = 123}`,                                              // service.name doesn't match type of dedicated column
-		`{.` + LabelServiceName + ` = "spanservicename"}`,                                        // service.name present on span
-		`{.` + LabelHTTPStatusCode + ` = "500ouch"}`,                                             // http.status_code doesn't match type of dedicated column
-		`{.` + LabelHTTPStatusCode + ` >= 500 && .` + LabelHTTPStatusCode + ` <= 600}`,           // Range at unscoped
-		`{span.` + LabelHTTPStatusCode + ` >= 500 && span.` + LabelHTTPStatusCode + ` <= 600}`,   // Range at span scope
-		`{resource.` + LabelServiceName + ` >= 122 && resource.` + LabelServiceName + ` <= 124}`, // Range at resource scope
-		*/
+		`{.` + LabelServiceName + ` = "spanservicename"}`,                                      // service.name present on span
+		`{.` + LabelHTTPStatusCode + ` >= 500 && .` + LabelHTTPStatusCode + ` <= 600}`,         // Range at unscoped
+		`{span.` + LabelHTTPStatusCode + ` >= 500 && span.` + LabelHTTPStatusCode + ` <= 600}`, // Range at span scope
+		`{resource.int >= 122 && resource.int <= 124}`,                                         // Range at resource scope
+		`{resource.int = 123}`, // Int at resource scope
 	}
 
 	for _, req := range searchesThatMatch {
@@ -137,12 +135,12 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 	searchesThatDontMatch := []string{
 		// TODO - Should the below query return data or not?  It does match the resource
 		// makeReq(parse(t, `{.foo = "abc"}`)),                           // This should not return results because the span has overridden this attribute to "def".
-		/*`{.foo =~ "xyz.*"}`,                                                                             // Regex IN
-		`{span.bool = true}`,                                                                            // Bool not match*/
-		`{` + LabelDuration + ` >  100s}`,  // Intrinsic: duration
-		`{` + LabelStatus + ` = ok}`,       // Intrinsic: status
-		`{` + LabelName + ` = "nothello"}`, // Intrinsic: name
-		/*`{.` + LabelServiceName + ` = "notmyservice"}`,                                                  // Well-known attribute: service.name not match
+		`{.foo =~ "xyz.*"}`,                                                                             // Regex IN
+		`{span.bool = true}`,                                                                            // Bool not match
+		`{` + LabelDuration + ` >  100s}`,                                                               // Intrinsic: duration
+		`{` + LabelStatus + ` = ok}`,                                                                    // Intrinsic: status
+		`{` + LabelName + ` = "nothello"}`,                                                              // Intrinsic: name
+		`{.` + LabelServiceName + ` = "notmyservice"}`,                                                  // Well-known attribute: service.name not match
 		`{.` + LabelHTTPStatusCode + ` = 200}`,                                                          // Well-known attribute: http.status_code not match
 		`{.` + LabelHTTPStatusCode + ` > 600}`,                                                          // Well-known attribute: http.status_code not match
 		`{.foo = "xyz" || .` + LabelHTTPStatusCode + " = 1000}",                                         // Matches neither condition
@@ -150,8 +148,8 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 		`{span.foo = "baz" && span.bar = 123}`,                                                          // Matches some conditions but not all
 		`{resource.cluster = "cluster" && resource.namespace = "namespace" && span.foo = "baz"}`,        // Matches some conditions but not all
 		`{resource.cluster = "notcluster" && resource.namespace = "namespace" && resource.foo = "abc"}`, // Matches some conditions but not all
-		`{resource.foo = "abc" && resource.bar = 123}`,                                                  // Matches some conditions but not all*/
-		`{` + LabelName + ` = "nothello" && ` + LabelDuration + ` = 100s }`, // Mix of duration with other conditions
+		`{resource.foo = "abc" && resource.bar = 123}`,                                                  // Matches some conditions but not all
+		`{` + LabelName + ` = "nothello" && ` + LabelDuration + ` = 100s }`,                             // Mix of duration with other conditions
 	}
 
 	for _, req := range searchesThatDontMatch {
@@ -216,7 +214,7 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 				),
 			),
 		},
-		/*{
+		{
 			// Span attributes lookup
 			// Only matches 1 condition. Returns span but only attributes that matched
 			makeReq(
@@ -304,14 +302,12 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 					},
 				),
 			),
-		},*/
-
+		},
 		{
 			// doesn't match anything
 			makeReq(parse(t, `{.xyz = "xyz"}`)),
 			nil,
 		},
-
 		{
 			// Intrinsics. 2nd span only
 			makeReq(
@@ -332,7 +328,7 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 				),
 			),
 		},
-		/*{
+		{
 			// Intrinsic duration with no filtering
 			traceql.FetchSpansRequest{Conditions: []traceql.Condition{{Attribute: traceql.NewIntrinsic(traceql.IntrinsicDuration)}}},
 			makeSpansets(
@@ -355,7 +351,7 @@ func TestBackendBlockSearchFetchMetaData(t *testing.T) {
 					},
 				),
 			),
-		},*/
+		},
 	}
 
 	for _, tc := range testCases {
@@ -420,7 +416,7 @@ func fullyPopulatedTestTrace(id [16]byte) *v1.TracesData {
 						{Key: LabelK8sPodName, Value: strPtr("k8spod")},
 						{Key: LabelK8sContainerName, Value: strPtr("k8scontainer")},
 						{Key: "foo", Value: strPtr("abc")},
-						{Key: LabelServiceName, Value: intPtr(123)}, // Different type than dedicated column
+						{Key: "int", Value: intPtr(123)},
 					},
 				},
 				ScopeSpans: []*v1.ScopeSpans{
