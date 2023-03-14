@@ -1732,8 +1732,6 @@ github.com/grafana/statsd_exporter v0.18.1-0.20211118164740-8e806158da0b h1:eFIc
 github.com/grafana/statsd_exporter v0.18.1-0.20211118164740-8e806158da0b/go.mod h1:N4Z1+iSqc9rnxlT1N8Qn3l65Vzb5t4Uq0jpg8nxyhio=
 github.com/grafana/tail v0.0.0-20220426200921-98e8eb28ea4c h1:qIsCzNln5YzuXfXbJgXhpfM+4gY7qi3mED3eYQS4Fls=
 github.com/grafana/tail v0.0.0-20220426200921-98e8eb28ea4c/go.mod h1:GIMXMPB/lRAllP5rVDvcGif87ryO2hgD7tCtHMdHrho=
-github.com/grafana/tempo v1.5.1-0.20230313075756-3e70bb948ecd h1:EkLIYS2HerRNo7m8/J4FatCbOAlPVU1dqmc78/U+dGg=
-github.com/grafana/tempo v1.5.1-0.20230313075756-3e70bb948ecd/go.mod h1:DgiW3gnAifuGORAdj1ibrQJhd4R+7wmu+OqGnKbXmnM=
 github.com/grafana/vmware_exporter v0.0.4-beta h1:Tb8Edm/wDYh0Lvhm38HLNTlkflUrlPGB+jD+/hW4xHI=
 github.com/grafana/vmware_exporter v0.0.4-beta/go.mod h1:+SsUoWeCJ3nDm1gkw8xqBp4NNSUIrGVoEbnwJeeoIVU=
 github.com/grafana/windows_exporter v0.15.1-0.20220202211901-871715ba0b43 h1:gb+wDKb+9r4n3QbMzfudcHDtE9lI+kKjx+98bYphqK4=
@@ -2219,6 +2217,8 @@ github.com/mailru/easyjson v0.7.1/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
+github.com/mapno/tempo v0.6.1-0.20230314164351-c27a236a28b7 h1:9NuzT6GWjZ8ddJ6hYZmpsX9rb5bTq1WMSxn6UYpVlOQ=
+github.com/mapno/tempo v0.6.1-0.20230314164351-c27a236a28b7/go.mod h1:DgiW3gnAifuGORAdj1ibrQJhd4R+7wmu+OqGnKbXmnM=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=
 github.com/marstr/guid v1.1.0/go.mod h1:74gB1z2wpxxInTG6yaqA7KrtM0NZ+RbrcqDvYHefzho=

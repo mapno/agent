@@ -679,3 +679,5 @@ exclude (
 )
 
 replace github.com/github/smimesign => github.com/grafana/smimesign v0.2.1-0.20220408144937-2a5adf3481d3
+
+replace github.com/grafana/tempo => github.com/mapno/tempo v0.6.1-0.20230314164351-c27a236a28b7
