@@ -3,10 +3,12 @@ package processor
 import (
 	"context"
 	"encoding/hex"
+	"regexp"
 	"time"
 
 	"github.com/grafana/tempo/pkg/tempopb"
 	"github.com/grafana/tempo/pkg/traceql"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	v1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
@@ -32,15 +34,39 @@ type PtraceFetcher struct {
 
 var _ traceql.SpansetFetcher = (*PtraceFetcher)(nil)
 
+// Fetch - Implements a traceql storage backend that runs against the in-memory trace.
+// It is a minimal implementation and returns spans that a match at least 1 condition.
+// Does not honor the AllConditions hint.
 func (f *PtraceFetcher) Fetch(_ context.Context, req traceql.FetchSpansRequest) (traceql.FetchSpansResponse, error) {
 	var matchingSpans []traceql.Span
 	var traceID []byte
 	var err error
 	td := f.td
 
+	// Split all conditions into appropriate scope
+	var resourceConditions []traceql.Condition
+	var spanConditions []traceql.Condition
+	for _, c := range req.Conditions {
+		switch c.Attribute.Scope {
+		case traceql.AttributeScopeSpan:
+			spanConditions = append(spanConditions, c)
+		case traceql.AttributeScopeResource:
+			resourceConditions = append(resourceConditions, c)
+		case traceql.AttributeScopeNone:
+			resourceConditions = append(resourceConditions, c)
+			spanConditions = append(spanConditions, c)
+		}
+	}
+
 	resourceSpans := td.ResourceSpans()
 	for i := 0; i < resourceSpans.Len(); i++ {
-		scopeSpans := resourceSpans.At(i).ScopeSpans()
+
+		rs := resourceSpans.At(i)
+
+		res := rs.Resource()
+		matchedAttrsRes := matchResource(resourceConditions, res)
+
+		scopeSpans := rs.ScopeSpans()
 		for j := 0; j < scopeSpans.Len(); j++ {
 			spans := scopeSpans.At(j).Spans()
 			for k := 0; k < spans.Len(); k++ {
@@ -64,45 +90,11 @@ func (f *PtraceFetcher) Fetch(_ context.Context, req traceql.FetchSpansRequest) 
 					continue
 				}
 
-				matchedAttrs := make(map[traceql.Attribute]traceql.Static)
-				for _, cond := range req.Conditions {
-					switch cond.Attribute {
-					case traceql.NewIntrinsic(traceql.IntrinsicDuration):
-						d := time.Duration(end - start)
-						var dmatch bool
-						switch cond.Op {
-						case traceql.OpEqual:
-							dmatch = d == cond.Operands[0].D
-						case traceql.OpGreater:
-							dmatch = d > cond.Operands[0].D
-						case traceql.OpGreaterEqual:
-							dmatch = d >= cond.Operands[0].D
-						case traceql.OpLess:
-							dmatch = d < cond.Operands[0].D
-						case traceql.OpLessEqual:
-							dmatch = d <= cond.Operands[0].D
-						}
-						if dmatch {
-							matchedAttrs[cond.Attribute] = traceql.NewStaticDuration(d)
-						}
-					case traceql.NewIntrinsic(traceql.IntrinsicName):
-						switch cond.Op {
-						case traceql.OpEqual:
-							if s.Name() == cond.Operands[0].S {
-								matchedAttrs[cond.Attribute] = traceql.NewStaticString(s.Name())
-							}
-						}
-					case traceql.NewIntrinsic(traceql.IntrinsicStatus):
-						st := statusPtraceToTraceQL(s.Status())
-						switch cond.Op {
-						case traceql.OpEqual:
-							if st == cond.Operands[0].Status {
-								matchedAttrs[cond.Attribute] = traceql.NewStaticStatus(st)
-							}
-						}
-					}
-				}
-				if len(matchedAttrs) > 0 {
+				matchedAttrs := matchSpan(spanConditions, s)
+
+				// Anything?
+				if len(matchedAttrsRes) > 0 || len(matchedAttrs) > 0 {
+					appendMatches(matchedAttrs, matchedAttrsRes)
 					matchingSpans = append(matchingSpans, &span{
 						id:                 spanID,
 						startTimeUnixNanos: uint64(start),
@@ -141,6 +133,198 @@ func (f *PtraceFetcher) Fetch(_ context.Context, req traceql.FetchSpansRequest) 
 			results: filteredSpansets,
 		},
 	}, nil
+}
+
+func matchResource(conditions []traceql.Condition, res pcommon.Resource) map[traceql.Attribute]traceql.Static {
+	output := map[traceql.Attribute]traceql.Static{}
+
+	// There are no intrinsics on resource, so we just
+	// check attributes.
+	for _, c := range conditions {
+		if v := matchAttr(c, res.Attributes()); v.Type != traceql.TypeNil {
+			output[traceql.NewScopedAttribute(traceql.AttributeScopeResource, false, c.Attribute.Name)] = v
+		}
+	}
+
+	return output
+}
+
+func matchSpan(conditions []traceql.Condition, span ptrace.Span) map[traceql.Attribute]traceql.Static {
+	output := map[traceql.Attribute]traceql.Static{}
+
+	for _, c := range conditions {
+		if c.Attribute.Intrinsic != traceql.IntrinsicNone {
+			switch c.Attribute.Intrinsic {
+			case traceql.IntrinsicDuration:
+				d := time.Duration(span.EndTimestamp() - span.StartTimestamp())
+				if evalDuration(c, d) {
+					output[c.Attribute] = traceql.NewStaticDuration(d)
+				}
+			case traceql.IntrinsicName:
+				if evalStr(c, span.Name()) {
+					output[c.Attribute] = traceql.NewStaticString(span.Name())
+				}
+			case traceql.IntrinsicStatus:
+				st := statusPtraceToTraceQL(span.Status())
+				if evalStatus(c, st) {
+					output[c.Attribute] = traceql.NewStaticStatus(st)
+				}
+			}
+			continue
+		}
+
+		// Check generic attributes map
+		if v := matchAttr(c, span.Attributes()); v.Type != traceql.TypeNil {
+			output[traceql.NewScopedAttribute(traceql.AttributeScopeSpan, false, c.Attribute.Name)] = v
+		}
+	}
+	return output
+}
+
+func matchAttr(c traceql.Condition, attrs pcommon.Map) traceql.Static {
+	if a, ok := attrs.Get(c.Attribute.Name); ok {
+		switch a.Type() {
+		case pcommon.ValueTypeStr:
+			if evalStr(c, a.Str()) {
+				return traceql.NewStaticString(a.Str())
+			}
+		case pcommon.ValueTypeInt:
+			if evalInt(c, int(a.Int())) {
+				return traceql.NewStaticInt(int(a.Int()))
+			}
+		case pcommon.ValueTypeDouble:
+			if evalFloat(c, a.Double()) {
+				return traceql.NewStaticFloat(a.Double())
+			}
+		case pcommon.ValueTypeBool:
+			if evalBool(c, a.Bool()) {
+				return traceql.NewStaticBool(a.Bool())
+			}
+		}
+	}
+	return traceql.NewStaticNil()
+}
+
+func evalStr(c traceql.Condition, s string) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].S
+	switch c.Op {
+	case traceql.OpEqual:
+		return s == op
+	case traceql.OpNotEqual:
+		return s != op
+	case traceql.OpRegex:
+		if reg, err := regexp.Compile(op); err == nil {
+			return reg.MatchString(s)
+		}
+	case traceql.OpNotRegex:
+		if reg, err := regexp.Compile(op); err == nil {
+			return !reg.MatchString(s)
+		}
+	}
+	return false
+}
+
+func evalInt(c traceql.Condition, i int) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].N
+	switch c.Op {
+	case traceql.OpEqual:
+		return i == op
+	case traceql.OpNotEqual:
+		return i != op
+	case traceql.OpGreater:
+		return i > op
+	case traceql.OpGreaterEqual:
+		return i >= op
+	case traceql.OpLess:
+		return i < op
+	case traceql.OpLessEqual:
+		return i <= op
+	}
+	return false
+}
+
+func evalFloat(c traceql.Condition, i float64) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].F
+	switch c.Op {
+	case traceql.OpEqual:
+		return i == op
+	case traceql.OpNotEqual:
+		return i != op
+	case traceql.OpGreater:
+		return i > op
+	case traceql.OpGreaterEqual:
+		return i >= op
+	case traceql.OpLess:
+		return i < op
+	case traceql.OpLessEqual:
+		return i <= op
+	}
+	return false
+}
+
+func evalBool(c traceql.Condition, i bool) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].B
+	switch c.Op {
+	case traceql.OpEqual:
+		return i == op
+	case traceql.OpNotEqual:
+		return i != op
+	}
+	return false
+}
+
+func evalDuration(c traceql.Condition, i time.Duration) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].D
+	switch c.Op {
+	case traceql.OpEqual:
+		return i == op
+	case traceql.OpNotEqual:
+		return i != op
+	case traceql.OpGreater:
+		return i > op
+	case traceql.OpGreaterEqual:
+		return i >= op
+	case traceql.OpLess:
+		return i < op
+	case traceql.OpLessEqual:
+		return i <= op
+	}
+	return false
+}
+
+func evalStatus(c traceql.Condition, st traceql.Status) bool {
+	if c.Op == traceql.OpNone {
+		return true
+	}
+	op := c.Operands[0].Status
+	switch c.Op {
+	case traceql.OpEqual:
+		return st == op
+	case traceql.OpNotEqual:
+		return st != op
+	}
+	return false
+}
+
+func appendMatches(to, from map[traceql.Attribute]traceql.Static) {
+	for k, v := range from {
+		to[k] = v
+	}
 }
 
 func mustDecodeString(s string) []byte {
