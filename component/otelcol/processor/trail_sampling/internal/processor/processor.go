@@ -108,8 +108,7 @@ func (tsp *trailSamplingProcessor) processTraces(resourceSpans ptrace.ResourceSp
 	for id, spans := range idToSpans {
 		lenSpans := int64(len(spans))
 
-		var d any
-		_, loaded := tsp.idToTrace.Load(id)
+		d, loaded := tsp.idToTrace.Load(id)
 		if !loaded {
 			spanCount := &atomic.Int64{}
 			spanCount.Store(lenSpans)
@@ -117,6 +116,7 @@ func (tsp *trailSamplingProcessor) processTraces(resourceSpans ptrace.ResourceSp
 				ArrivalTime:     time.Now(),
 				SpanCount:       spanCount,
 				ReceivedBatches: ptrace.NewTraces(),
+				FinalDecision:   sampling.Unspecified,
 			})
 		}
 		actualData := d.(*sampling.TraceData)
