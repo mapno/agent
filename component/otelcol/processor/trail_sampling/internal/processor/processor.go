@@ -119,70 +119,66 @@ func (tsp *trailSamplingProcessor) processTraces(resourceSpans ptrace.ResourceSp
 	var newTraceIDs int64
 	for id, spans := range idToSpans {
 		lenSpans := int64(len(spans))
-		// lenPolicies := len(tsp.policies)
-		// initialDecisions := make([]sampling.Decision, lenPolicies)
-		// for i := 0; i < lenPolicies; i++ {
-		// 	initialDecisions[i] = sampling.Pending
-		// }
+
+		var d any
 		_, loaded := tsp.idToTrace.Load(id)
 		if !loaded {
 			spanCount := &atomic.Int64{}
 			spanCount.Store(lenSpans)
-			// d, loaded = tsp.idToTrace.LoadOrStore(id, &sampling.TraceData{
-			// 	Decisions:       initialDecisions,
-			// 	ArrivalTime:     time.Now(),
-			// 	SpanCount:       spanCount,
-			// 	ReceivedBatches: ptrace.NewTraces(),
-			// })
+			d, loaded = tsp.idToTrace.LoadOrStore(id, &sampling.TraceData{
+				ArrivalTime:     time.Now(),
+				SpanCount:       spanCount,
+				ReceivedBatches: ptrace.NewTraces(),
+			})
 		}
-		// actualData := d.(*sampling.TraceData)
+		actualData := d.(*sampling.TraceData)
 		if loaded {
-			// actualData.SpanCount.Add(lenSpans)
+			actualData.SpanCount.Add(lenSpans)
 		} else {
 			newTraceIDs++
 			tsp.decisionBatcher.AddToCurrentBatch(id)
 			tsp.numTracesOnMap.Add(1)
 			postDeletion := false
-			// currTime := time.Now()
+			currTime := time.Now()
 			for !postDeletion {
 				select {
 				case tsp.deleteChan <- id:
 					postDeletion = true
 				default:
-					_ = <-tsp.deleteChan
-					// tsp.dropTrace(traceKeyToDrop, currTime)
+					traceKeyToDrop := <-tsp.deleteChan
+					tsp.dropTrace(traceKeyToDrop, currTime)
 				}
 			}
 		}
 
 		// The only thing we really care about here is the final decision.
-		// actualData.Lock()
-		// finalDecision := actualData.FinalDecision
+		actualData.Lock()
+		finalDecision := actualData.FinalDecision
 
-		// if finalDecision == sampling.Unspecified {
-		// 	// If the final decision hasn't been made, add the new spans under the lock.
-		// 	appendToTraces(actualData.ReceivedBatches, resourceSpans, spans)
-		// 	actualData.Unlock()
-		// } else {
-		// 	actualData.Unlock()
-		//
-		// 	switch finalDecision {
-		// 	case sampling.Sampled:
-		// 		// Forward the spans to the policy destinations
-		// 		traceTd := ptrace.NewTraces()
-		// 		appendToTraces(traceTd, resourceSpans, spans)
-		// 		if err := tsp.nextConsumer.ConsumeTraces(tsp.ctx, traceTd); err != nil {
-		// 			tsp.logger.Warn(
-		// 				"Error sending late arrived spans to destination",
-		// 				zap.Error(err))
-		// 		}
-		// 	case sampling.NotSampled:
-		// 		stats.Record(tsp.ctx, statLateSpanArrivalAfterDecision.M(int64(time.Since(actualData.DecisionTime)/time.Second)))
-		// 	default:
-		// 		tsp.logger.Warn("Encountered unexpected sampling decision",
-		// 			zap.Int("decision", int(finalDecision)))
-		// 	}
-		// }
+		if finalDecision == sampling.Unspecified {
+			// If the final decision hasn't been made, add the new spans under the lock.
+			appendToTraces(actualData.ReceivedBatches, resourceSpans, spans)
+			actualData.Unlock()
+		} else {
+			actualData.Unlock()
+
+			switch finalDecision {
+			case sampling.Sampled:
+				// Forward the spans to the policy destinations
+				traceTd := ptrace.NewTraces()
+				appendToTraces(traceTd, resourceSpans, spans)
+				if err := tsp.nextConsumer.ConsumeTraces(tsp.ctx, traceTd); err != nil {
+					tsp.logger.Warn(
+						"Error sending late arrived spans to destination",
+						zap.Error(err))
+				}
+			case sampling.NotSampled:
+				// stats.Record(tsp.ctx, statLateSpanArrivalAfterDecision.M(int64(time.Since(actualData.DecisionTime)/time.Second)))
+			default:
+				tsp.logger.Warn("Encountered unexpected sampling decision",
+					zap.Int("decision", int(finalDecision)))
+			}
+		}
 	}
 
 	// stats.Record(tsp.ctx, statNewTraceIDReceivedCount.M(newTraceIDs))
@@ -241,6 +237,22 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 		// zap.Int64("droppedPriorToEvaluation", metrics.idNotFoundOnMapCount),
 		// zap.Int64("policyEvaluationErrors", metrics.evaluateErrorCount),
 	)
+}
+
+func (tsp *trailSamplingProcessor) dropTrace(traceID pcommon.TraceID, deletionTime time.Time) {
+	var trace *sampling.TraceData
+	if d, ok := tsp.idToTrace.Load(traceID); ok {
+		trace = d.(*sampling.TraceData)
+		tsp.idToTrace.Delete(traceID)
+		// Subtract one from numTracesOnMap per https://godoc.org/sync/atomic#AddUint64
+		tsp.numTracesOnMap.Add(^uint64(0))
+	}
+	if trace == nil {
+		tsp.logger.Error("Attempt to delete traceID not on table")
+		return
+	}
+
+	// stats.Record(tsp.ctx, statTraceRemovalAgeSec.M(int64(deletionTime.Sub(trace.ArrivalTime)/time.Second)))
 }
 
 func (tsp *trailSamplingProcessor) Capabilities() consumer.Capabilities {
