@@ -2,7 +2,6 @@ package processor
 
 import (
 	"context"
-	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -25,7 +24,7 @@ type trailSamplingProcessor struct {
 	logger       *zap.Logger // TODO: Use better logger
 	nextConsumer consumer.Traces
 
-	policies []*sampling.Policy
+	policies []sampling.PolicyEvaluator
 
 	decisionBatcher idbatcher.Batcher
 	idToTrace       sync.Map
@@ -52,25 +51,14 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 		return nil, err
 	}
 
-	var policies []*sampling.Policy
-	for _, pol := range cfg.PolicyCfgs {
+	var policies []sampling.PolicyEvaluator
+	for _, policyCfg := range cfg.PolicyCfgs {
+		policy := sampling.NewTraceQLSampler(policyCfg.Query)
+		if policyCfg.Probabilistic > 0 {
+			policy.WithProbabilitySampler(policyCfg.Probabilistic)
+		}
 
-		// TODO: Build real traceql policies
-		policies = append(policies, &sampling.Policy{
-			Name: "test",
-			Evaluate: func(id pcommon.TraceID, trace *sampling.TraceData) (sampling.Decision, error) {
-				log.Println("Evaluating trace", id.HexString())
-
-				matched, err := Matches(ctx, trace.ReceivedBatches, pol.Query)
-				if err != nil {
-					return sampling.NotSampled, err
-				}
-				if matched {
-					return sampling.Sampled, nil
-				}
-				return sampling.Pending, nil
-			},
-		})
+		policies = append(policies, policy)
 	}
 
 	tsp := &trailSamplingProcessor{

@@ -1,4 +1,4 @@
-package processor
+package traceql
 
 import (
 	"context"
@@ -108,7 +108,7 @@ func TestBackendBlockSearchTraceQL(t *testing.T) {
 		`{.foo =~ "d.*"}`,        // String Regex
 		`{resource.foo = "abc"}`, // Resource-level only
 		`{span.foo = "def"}`,     // Span-level only
-		//`{.foo}`, // Projection only
+		// `{.foo}`, // Projection only
 		`{.foo = "baz" || .` + LabelHTTPStatusCode + ` > 100}`,                       // Matches either condition
 		`{.` + LabelHTTPStatusCode + ` > 100 || .foo = "baz"}`,                       // Same as above but reversed order
 		`{.foo > 100 || .foo = "def"}`,                                               // Same attribute with mixed types

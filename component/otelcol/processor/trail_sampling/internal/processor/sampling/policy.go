@@ -15,7 +15,7 @@ const (
 	Unspecified
 )
 
-type Policy struct {
-	Name     string
-	Evaluate func(traceID pcommon.TraceID, trace *TraceData) (Decision, error)
+type PolicyEvaluator interface {
+	// Evaluate evaluates the policy for the given trace.
+	Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error)
 }
