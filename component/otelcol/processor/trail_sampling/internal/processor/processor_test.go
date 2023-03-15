@@ -25,14 +25,14 @@ func TestTrailSamplingProcessor_HappyPath(t *testing.T) {
 		ExpectedNewTracesPerSec: 2,
 		PolicyCfgs: []PolicyCfg{
 			{
-				Name:          "drop service.name = service2",
-				Query:         `{ resource.service.name = "service2" }`,
-				Probabilistic: 0,
+				Name:         "drop service.name = service2",
+				Query:        `{ resource.service.name = "service2" }`,
+				SamplingRate: 0,
 			},
 			{
-				Name:          "base (fallthrough)",
-				Query:         "{}",
-				Probabilistic: 1,
+				Name:         "base (fallthrough)",
+				Query:        "{}",
+				SamplingRate: 1,
 			},
 		},
 	}

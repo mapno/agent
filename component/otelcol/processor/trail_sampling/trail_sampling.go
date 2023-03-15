@@ -38,9 +38,9 @@ type PolicyCfg struct {
 
 func (cfg *PolicyCfg) Convert() trailprocessor.PolicyCfg {
 	return trailprocessor.PolicyCfg{
-		Name:          cfg.Name,
-		Query:         cfg.Query,
-		Probabilistic: cfg.Probabilistic,
+		Name:         cfg.Name,
+		Query:        cfg.Query,
+		SamplingRate: cfg.Probabilistic,
 	}
 }
 

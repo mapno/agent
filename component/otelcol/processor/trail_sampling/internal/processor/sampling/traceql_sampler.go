@@ -42,6 +42,10 @@ func (s *TraceQLSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decis
 	return Unspecified, nil
 }
 
-func (s *TraceQLSampler) WithProbabilitySampler(r float64) {
+func (s *TraceQLSampler) WithProbabilisticSampler(r float64) {
 	s.rateSampler = NewProbabilisticSampler(r)
+}
+
+func (s *TraceQLSampler) WithRateLimitingSampler(r float64) {
+	s.rateSampler = NewRateLimitingSampler(r)
 }

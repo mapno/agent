@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 	"time"
@@ -62,6 +63,10 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 		return nil, otelcomponent.ErrNilNextConsumer
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
 	numDecisionBatches := uint64(cfg.DecisionWait.Seconds())
 	inBatcher, err := idbatcher.New(numDecisionBatches, cfg.ExpectedNewTracesPerSec, uint64(2*runtime.NumCPU()))
 	if err != nil {
@@ -71,7 +76,12 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 	var policies []sampling.PolicyEvaluator
 	for _, policyCfg := range cfg.PolicyCfgs {
 		policy := sampling.NewTraceQLSampler(policyCfg.Name, policyCfg.Query)
-		policy.WithProbabilitySampler(policyCfg.Probabilistic)
+
+		if policyCfg.SamplingRate >= 0 {
+			policy.WithProbabilisticSampler(policyCfg.SamplingRate)
+		} else if policyCfg.TracesPerSecond > 0 {
+			policy.WithRateLimitingSampler(policyCfg.TracesPerSecond)
+		}
 
 		policies = append(policies, policy)
 	}
@@ -236,7 +246,7 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 			recordPolicyMetrics("__default__", sampling.NotSampled, trace)
 		}
 
-		//recordTotalMetrics(trace)
+		// recordTotalMetrics(trace)
 
 		// Sampled or not, remove the batches
 		trace.Lock()
