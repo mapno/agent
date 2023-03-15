@@ -2,13 +2,13 @@ version: "3"
 services:
 
   # Generate fake traces...
-  #k6-tracing:
-  #  image: ghcr.io/grafana/xk6-client-tracing:v0.0.2
-  #  environment:
-  #    - ENDPOINT=agent:4317
-  #  restart: always
-  #  depends_on:
-  #    - tempo
+  k6-tracing:
+    image: ghcr.io/grafana/xk6-client-tracing:v0.0.2
+    environment:
+      - ENDPOINT=agent:4317
+    restart: always
+    depends_on:
+      - tempo
 
   # And put them in a Grafana Agent pipeline...
   agent:

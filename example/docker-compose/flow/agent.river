@@ -41,7 +41,7 @@ otelcol.processor.trail_sampling "tempo" {
     policy {
         name = "default"
         query = "{}"
-        probabilistic = 1
+        probabilistic = 0.5
     }
 
     output {
