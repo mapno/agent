@@ -54,6 +54,8 @@ services:
     image: grafana/grafana:9.4.3
     volumes:
       - ./shared/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./shared/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./shared/dashboard-trail-sampling.json:/var/lib/grafana/dashboards/dashboard-trail-sampling.json
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
