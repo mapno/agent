@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/sampling"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	otelcomponent "go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -15,6 +17,21 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/grafana/agent/component/otelcol/processor/trail_sampling/internal/processor/idbatcher"
+)
+
+var (
+	metricPolicyTraces = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trail_sampling_policy_spans_total",
+	}, []string{"policy", "decision"})
+	metricPolicySpans = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trail_sampling_policy_traces_total",
+	}, []string{"policy", "decision"})
+	/*metricTraces = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "trail_sampling_traces_total",
+	})
+	metricSpans = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "trail_sampling_spans_total",
+	})*/
 )
 
 // trailSamplingProcessor handles the incoming trace data and uses the given sampling
@@ -201,19 +218,25 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 				continue
 			}
 
+			recordPolicyMetrics(policy.Name(), decision, trace)
+
 			switch decision {
 			case sampling.NotSampled, sampling.Sampled:
 				trace.FinalDecision = decision
-				break policies
 				// Exit early
+				break policies
 			case sampling.Unspecified:
 			}
 		}
 
-		// If no policy decided to sample, then the trace is not sampled
+		// If no policy matched, then the trace is not sampled
 		if trace.FinalDecision == sampling.Unspecified {
 			trace.FinalDecision = sampling.NotSampled
+
+			recordPolicyMetrics("__default__", sampling.NotSampled, trace)
 		}
+
+		//recordTotalMetrics(trace)
 
 		// Sampled or not, remove the batches
 		trace.Lock()
@@ -284,3 +307,27 @@ func appendToTraces(dest ptrace.Traces, rss ptrace.ResourceSpans, spans []*ptrac
 		span.CopyTo(sp)
 	}
 }
+
+func recordPolicyMetrics(policy string, decision sampling.Decision, t *sampling.TraceData) {
+	var decisionLabel string
+	switch decision {
+	case sampling.Sampled:
+		decisionLabel = "sampled"
+	case sampling.NotSampled:
+		decisionLabel = "dropped"
+	default:
+		return
+	}
+
+	metricPolicyTraces.WithLabelValues(policy, "matched").Inc()
+	metricPolicyTraces.WithLabelValues(policy, decisionLabel).Inc()
+
+	spanCount := float64(t.ReceivedBatches.SpanCount())
+	metricPolicySpans.WithLabelValues(policy, "matched").Add(spanCount)
+	metricPolicySpans.WithLabelValues(policy, decisionLabel).Add(spanCount)
+}
+
+/*func recordTotalMetrics(t *sampling.TraceData) {
+	metricTraces.Inc()
+	metricSpans.Add(float64(t.ReceivedBatches.SpanCount()))
+}*/
