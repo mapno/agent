@@ -14,6 +14,7 @@ const (
 )
 
 type PolicyEvaluator interface {
+	Name() string
 	// Evaluate evaluates the policy for the given trace.
 	Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error)
 }

@@ -17,6 +17,8 @@ type RateLimitingSampler struct {
 	limiter *rate.Limiter
 }
 
+func (s *RateLimitingSampler) Name() string { return "rate_limiting" }
+
 func (s *RateLimitingSampler) Evaluate(pcommon.TraceID, *TraceData) (Decision, error) {
 	if s.limiter.Allow() {
 		return Sampled, nil

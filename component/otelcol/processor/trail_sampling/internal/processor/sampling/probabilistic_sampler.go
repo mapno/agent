@@ -20,6 +20,8 @@ type ProbabilisticSampler struct {
 	threshold uint64
 }
 
+func (s *ProbabilisticSampler) Name() string { return "probabilistic" }
+
 func (s *ProbabilisticSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error) {
 	// Short circuits
 	if s.threshold == 0 {

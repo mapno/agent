@@ -8,16 +8,18 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
-func NewTraceQLSampler(query string) *TraceQLSampler {
-	return &TraceQLSampler{query: query}
+func NewTraceQLSampler(name, query string) *TraceQLSampler {
+	return &TraceQLSampler{name: name, query: query}
 }
 
 var _ PolicyEvaluator = (*TraceQLSampler)(nil)
 
 type TraceQLSampler struct {
-	query       string
+	name, query string
 	rateSampler PolicyEvaluator
 }
+
+func (s *TraceQLSampler) Name() string { return s.name }
 
 func (s *TraceQLSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decision, error) {
 

@@ -30,7 +30,7 @@ type trailSamplingProcessor struct {
 	idToTrace       sync.Map
 	numTracesOnMap  *atomic.Uint64
 
-	policyTicker    *sampling.PolicyTicker
+	policyTicker    sampling.PolicyTicker
 	tickerFrequency time.Duration
 	deleteChan      chan pcommon.TraceID
 }
@@ -53,7 +53,7 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 
 	var policies []sampling.PolicyEvaluator
 	for _, policyCfg := range cfg.PolicyCfgs {
-		policy := sampling.NewTraceQLSampler(policyCfg.Query)
+		policy := sampling.NewTraceQLSampler(policyCfg.Name, policyCfg.Query)
 		policy.WithProbabilitySampler(policyCfg.Probabilistic)
 
 		policies = append(policies, policy)
@@ -69,8 +69,8 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 		numTracesOnMap:  &atomic.Uint64{},
 	}
 
-	tsp.policyTicker = &sampling.PolicyTicker{OnTickFunc: tsp.samplingPolicyOnTick}
-	tsp.deleteChan = make(chan pcommon.TraceID, 100)
+	tsp.policyTicker = &sampling.Ticker{OnTickFunc: tsp.samplingPolicyOnTick}
+	tsp.deleteChan = make(chan pcommon.TraceID, cfg.NumTraces)
 
 	return tsp, nil
 }
@@ -93,6 +93,9 @@ func (tsp *trailSamplingProcessor) groupSpansByTraceKey(resourceSpans ptrace.Res
 		for k := 0; k < spansLen; k++ {
 			span := spans.At(k)
 			key := span.TraceID()
+			// if key.IsEmpty() {
+			// 	continue
+			// }
 			idToSpans[key] = append(idToSpans[key], &span)
 		}
 	}
@@ -141,29 +144,31 @@ func (tsp *trailSamplingProcessor) processTraces(resourceSpans ptrace.ResourceSp
 		actualData.Lock()
 		finalDecision := actualData.FinalDecision
 
-		if finalDecision == sampling.Unspecified {
+		switch finalDecision {
+		case sampling.Unspecified:
 			// If the final decision hasn't been made, add the new spans under the lock.
 			appendToTraces(actualData.ReceivedBatches, resourceSpans, spans)
 			actualData.Unlock()
-		} else {
-			actualData.Unlock()
 
-			switch finalDecision {
-			case sampling.Sampled:
-				// Forward the spans to the policy destinations
-				traceTd := ptrace.NewTraces()
-				appendToTraces(traceTd, resourceSpans, spans)
-				if err := tsp.nextConsumer.ConsumeTraces(tsp.ctx, traceTd); err != nil {
-					tsp.logger.Warn(
-						"Error sending late arrived spans to destination",
-						zap.Error(err))
-				}
-			case sampling.NotSampled:
-				// stats.Record(tsp.ctx, statLateSpanArrivalAfterDecision.M(int64(time.Since(actualData.DecisionTime)/time.Second)))
-			default:
-				tsp.logger.Warn("Encountered unexpected sampling decision",
-					zap.Int("decision", int(finalDecision)))
+		case sampling.Sampled:
+			actualData.Unlock()
+			// Forward the spans to the policy destinations
+			traceTd := ptrace.NewTraces()
+			appendToTraces(traceTd, resourceSpans, spans)
+			if err := tsp.nextConsumer.ConsumeTraces(tsp.ctx, traceTd); err != nil {
+				tsp.logger.Warn(
+					"Error sending late arrived spans to destination",
+					zap.Error(err))
 			}
+
+		case sampling.NotSampled:
+			actualData.Unlock()
+			// stats.Record(tsp.ctx, statLateSpanArrivalAfterDecision.M(int64(time.Since(actualData.DecisionTime)/time.Second)))
+
+		default:
+			actualData.Unlock()
+			tsp.logger.Warn("Encountered unexpected sampling decision",
+				zap.Int("decision", int(finalDecision)))
 		}
 	}
 
@@ -186,17 +191,28 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 		trace := d.(*sampling.TraceData)
 		trace.DecisionTime = time.Now()
 
+	policies:
 		for _, policy := range tsp.policies {
+			tsp.logger.Debug("Evaluating policy", zap.String("policy", policy.Name()))
 			decision, err := policy.Evaluate(id, trace)
 			if err != nil {
 				// metrics.evaluateErrorCount++
 				tsp.logger.Warn("Error evaluating sampling policy", zap.Error(err))
 				continue
 			}
-			if decision != sampling.Unspecified {
+
+			switch decision {
+			case sampling.NotSampled, sampling.Sampled:
 				trace.FinalDecision = decision
-				break
+				break policies
+				// Exit early
+			case sampling.Unspecified:
 			}
+		}
+
+		// If no policy decided to sample, then the trace is not sampled
+		if trace.FinalDecision == sampling.Unspecified {
+			trace.FinalDecision = sampling.NotSampled
 		}
 
 		// Sampled or not, remove the batches
@@ -206,6 +222,7 @@ func (tsp *trailSamplingProcessor) samplingPolicyOnTick() {
 		trace.Unlock()
 
 		if trace.FinalDecision == sampling.Sampled {
+			tsp.logger.Debug("Sampled spans", zap.Int("count", allSpans.SpanCount()))
 			_ = tsp.nextConsumer.ConsumeTraces(context.TODO(), allSpans)
 		}
 	}
