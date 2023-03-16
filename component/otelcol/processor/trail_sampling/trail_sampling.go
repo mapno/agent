@@ -33,14 +33,17 @@ type PolicyCfg struct {
 	// Query is the query to use for the policy. Required.
 	Query string `river:"query,attr"`
 	// Probabilistic is the probability to sample a trace. Required.
-	Probabilistic float64 `river:"probabilistic,attr"`
+	Probabilistic float64 `river:"probabilistic,attr,optional"`
+	// TracesPerSecond is the number of traces to sample per second. Required.
+	TracesPerSecond float64 `river:"traces_per_second,attr,optional"`
 }
 
 func (cfg *PolicyCfg) Convert() trailprocessor.PolicyCfg {
 	return trailprocessor.PolicyCfg{
-		Name:         cfg.Name,
-		Query:        cfg.Query,
-		SamplingRate: cfg.Probabilistic,
+		Name:            cfg.Name,
+		Query:           cfg.Query,
+		SamplingRate:    cfg.Probabilistic,
+		TracesPerSecond: cfg.TracesPerSecond,
 	}
 }
 

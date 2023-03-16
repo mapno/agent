@@ -15,7 +15,7 @@ type PolicyCfg struct {
 	// SamplingRate is the probability of sampling a trace that matches the query.
 	SamplingRate float64 `mapstructure:"sampling_rate"`
 	// TracesPerSecond is the maximum number of traces per second that will be sampled.
-	TracesPerSecond float64 `mapstructure:"traces_per_second`
+	TracesPerSecond float64 `mapstructure:"traces_per_second"`
 }
 
 func (p *PolicyCfg) Validate() error {
