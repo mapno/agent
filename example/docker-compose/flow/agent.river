@@ -7,7 +7,7 @@ tracing {
 	// Sample all traces. This value should be lower for production configs!
 	sampling_fraction = 1
 
-	write_to = [otelcol.processor.trail_sampling.tempo.input]
+	write_to = [otelcol.processor.trail_sampling.traces.input]
 }
 
 otelcol.receiver.jaeger "jaeger" {
@@ -18,7 +18,7 @@ otelcol.receiver.jaeger "jaeger" {
     thrift_compact {}
   }
     output {
-        traces = [otelcol.processor.trail_sampling.tempo.input]
+        traces = [otelcol.processor.trail_sampling.traces.input]
     }
 }
 
@@ -27,21 +27,27 @@ otelcol.receiver.otlp "tempo" {
         endpoint = "0.0.0.0:4317"
     }
     output {
-        traces = [otelcol.processor.trail_sampling.tempo.input]
+        traces = [otelcol.processor.trail_sampling.traces.input]
     }
 }
 
-otelcol.processor.trail_sampling "tempo" {
+otelcol.processor.trail_sampling "traces" {
     policy {
-        name = "ignores"
-        query = "{ name =~ `.*/config` }"
+        name = "Drop dev"
+        query = "{ resource.service.name = `grafana-agent` }"
         sampling_rate = 0
     }
 
     policy {
-        name = "default"
+        name = "Auth"
+        query = "{ name = `article-to-cart` }"
+        sampling_rate = 1
+    }
+
+    policy {
+        name = "Default"
         query = "{}"
-        traces_per_second = 10
+        sampling_rate = 0.5
     }
 
     output {
