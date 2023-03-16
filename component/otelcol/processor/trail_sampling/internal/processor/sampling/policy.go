@@ -13,6 +13,19 @@ const (
 	Unspecified
 )
 
+func (d Decision) String() string {
+	switch d {
+	case Sampled:
+		return "sampled"
+	case NotSampled:
+		return "not_sampled"
+	case Unspecified:
+		return "unspecified"
+	default:
+		return "unknown"
+	}
+}
+
 type PolicyEvaluator interface {
 	Name() string
 	// Evaluate evaluates the policy for the given trace.

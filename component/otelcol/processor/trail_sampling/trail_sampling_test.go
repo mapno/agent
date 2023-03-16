@@ -15,9 +15,9 @@ func TestArguments_Convert(t *testing.T) {
 		ExpectedNewTracesPerSec: 2,
 		Policies: []PolicyCfg{
 			{
-				Name:          "policy1",
-				Query:         "query1",
-				Probabilistic: 0.1,
+				Name:         "policy1",
+				Query:        "query1",
+				SamplingRate: 0.1,
 			},
 		},
 		Output: &otelcol.ConsumerArguments{},

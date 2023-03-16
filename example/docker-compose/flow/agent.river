@@ -35,13 +35,13 @@ otelcol.processor.trail_sampling "tempo" {
     policy {
         name = "ignores"
         query = "{ name =~ `.*/config` }"
-        probabilistic = 0
+        sampling_rate = 0
     }
 
     policy {
         name = "default"
         query = "{}"
-        probabilistic = 0.5
+        sampling_rate = 0.5
     }
 
     output {

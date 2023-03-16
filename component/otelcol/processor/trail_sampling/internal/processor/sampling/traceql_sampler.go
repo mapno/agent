@@ -34,7 +34,7 @@ func (s *TraceQLSampler) Evaluate(traceID pcommon.TraceID, td *TraceData) (Decis
 			return Sampled, nil
 		}
 		decision, err := s.rateSampler.Evaluate(traceID, td)
-		fmt.Printf("...Sampler decision: %v\n", decision)
+		fmt.Printf("...Sampler decision: %s\n", decision)
 		return decision, err
 	}
 
