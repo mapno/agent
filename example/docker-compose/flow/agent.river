@@ -41,7 +41,7 @@ otelcol.processor.trail_sampling "tempo" {
     policy {
         name = "default"
         query = "{}"
-        sampling_rate = 0.5
+        traces_per_second = 10
     }
 
     output {

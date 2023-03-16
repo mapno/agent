@@ -1,0 +1,41 @@
+processors:
+  tail_sampling:
+    #...
+    policies: # 50% of errors and tail latency of service foo
+      - name: service-foo-errors,
+        type: and
+        and:
+          and_sub_policy:
+            - name: service-foo
+              type: string_attribute
+              string_attribute:
+                key: "service.name"
+                values:
+                  - "foo"
+            - name: errors
+              type: status_code
+              status_code:
+                status_codes:
+                  - "ERROR"
+            - name: probability
+              type: probability
+              probability:
+                sampling_percentage: 50
+      - name: service-foo-tail-latency,
+        type: and
+        and:
+          and_sub_policy:
+            - name: service-foo
+              type: string_attribute
+              string_attribute:
+                key: "service.name"
+                values:
+                  - "foo"
+            - name: tail-latency
+              type: latency
+              latency:
+                threshold_ms: 5000 # 5 seconds
+            - name: probability
+              type: probability
+              probability:
+                sampling_percentage: 50

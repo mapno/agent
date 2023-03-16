@@ -77,10 +77,10 @@ func newTracesProcessor(ctx context.Context, nextConsumer consumer.Traces, cfg C
 	for _, policyCfg := range cfg.PolicyCfgs {
 		policy := sampling.NewTraceQLSampler(policyCfg.Name, policyCfg.Query)
 
-		if policyCfg.SamplingRate >= 0 {
-			policy.WithProbabilisticSampler(policyCfg.SamplingRate)
-		} else if policyCfg.TracesPerSecond > 0 {
+		if policyCfg.TracesPerSecond > 0 {
 			policy.WithRateLimitingSampler(policyCfg.TracesPerSecond)
+		} else if policyCfg.SamplingRate >= 0 {
+			policy.WithProbabilisticSampler(policyCfg.SamplingRate)
 		}
 
 		policies = append(policies, policy)
